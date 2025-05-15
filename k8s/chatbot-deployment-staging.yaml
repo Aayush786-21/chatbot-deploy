@@ -1,0 +1,42 @@
+# k8s/chatbot-deployment-staging.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chatbot-app-staging # This name will be used in Jenkinsfile later if we deploy
+  namespace: staging       # We'll assume/create a 'staging' namespace in K8s
+  labels:
+    app: chatbot-app-staging
+    environment: staging
+spec:
+  replicas: 1 # For staging, 1 replica is often sufficient
+  selector:
+    matchLabels:
+      app: chatbot-app-staging
+  template:
+    metadata:
+      labels:
+        app: chatbot-app-staging
+        environment: staging
+    spec:
+      containers:
+      - name: chatbot-app # The container name inside the pod
+        image: yourdockerhubusername/chatbot-staging:latest # This image will be built and pushed by Jenkins
+        ports:
+        - containerPort: 3000 # The port your Next.js app listens on
+        env:
+        - name: NODE_ENV
+          value: "production" # Next.js 'npm start' runs best with NODE_ENV=production
+        # Add any other environment variables your application needs for staging
+        # For example, if you were using an API key:
+        # - name: OPENAI_API_KEY
+        #   valueFrom:
+        #     secretKeyRef:
+        #       name: Gemini API# Name of the K8s secret
+        #       key:  AIzaSyAE7Ct7Kn9NOLO0w3_E9U9WMY-RrDu4Tls
+        resources: # Optional: Define resource requests and limits
+          requests:
+            memory: "256Mi" # Request 256 Megabytes of RAM
+            cpu: "250m"     # Request 0.25 CPU cores (250 millicores)
+          limits:
+            memory: "512Mi" # Limit to 512 Megabytes of RAM
+            cpu: "500m"     # Limit to 0.5 CPU cores

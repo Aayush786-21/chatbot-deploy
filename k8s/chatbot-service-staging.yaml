@@ -1,0 +1,19 @@
+# k8s/chatbot-service-staging.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: chatbot-app-staging-svc
+  namespace: staging
+  labels:
+    app: chatbot-app-staging
+    environment: staging
+spec:
+  selector:
+    app: chatbot-app-staging # This must match the labels on your Pods (from the Deployment)
+  ports:
+    - protocol: TCP
+      port: 80             # Port the service will be available on *within the cluster*
+      targetPort: 3000       # Port the container (your app) is listening on
+  type: NodePort           # Exposes the Service on each Node's IP at a static port.
+                           # Good for local K8s/Kubeadm for initial access.
+                           # Later, for production or more advanced setups, you might use LoadBalancer (if cloud/MetalLB) or Ingress.
