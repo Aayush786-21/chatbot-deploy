@@ -1,0 +1,22 @@
+# docker-compose.yml
+version: '3.8'
+services:
+  chatbot-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: chatbot_nextjs_dev
+    command: npm run dev # For Next.js development with HMR
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/app # Mounts app source
+      # Keep container's node_modules and .next separate from host to avoid conflicts
+      # and use the ones built/installed inside the image/container.
+      - /app/node_modules
+      - /app/.next
+    environment:
+      - NODE_ENV=development
+      # For some systems, if HMR isn't working inside Docker:
+      # WATCHPACK_POLLING=true # For Webpack 5+ (Next.js 11+)
+      # CHOKIDAR_USEPOLLING=true # Older alternative
