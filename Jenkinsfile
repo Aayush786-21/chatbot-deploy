@@ -1,18 +1,17 @@
-// Jenkinsfile (for staging branch)  
+// Jenkinsfile (for main/production branch)
 pipeline {
     agent any
 
     tools {
-        // Ensure 'node18' (or your chosen name) is configured in
-        // Jenkins > Manage Jenkins > Global Tool Configuration > NodeJS installations
         nodejs 'node18'
     }
 
     environment {
         DOCKERHUB_CREDENTIALS_ID = 'dockerhub-credentials'
-        DOCKER_IMAGE_NAME        = 'aayush786/chatbot-staging' // <<<<<<< CHANGE THIS (your Docker Hub username)
-        APP_NAME                 = 'chatbot-app-staging'
-        K8S_NAMESPACE            = 'staging'
+        DOCKER_IMAGE_NAME        = 'aayush786/chatbot-prod' // Your production image
+        APP_DEPLOYMENT_NAME      = 'chatbot-app-prod'
+        K8S_NAMESPACE            = 'production'
+        KUBECONFIG_CREDENTIALS_ID = 'kubeadm-cluster-config' // For your Kubeadm cluster
     }
 
     stages {
@@ -20,64 +19,70 @@ pipeline {
             steps {
                 checkout scm
                 sh 'echo "Current branch:" && git branch'
-                sh 'echo "Workspace content:" && ls -la'
             }
         }
 
         stage('Install Dependencies & Build App') {
             steps {
-                sh 'echo "Node version:" && node -v'
-                sh 'echo "NPM version:" && npm -v'
-                sh 'echo "Installing dependencies with npm ci..."'
-                sh 'npm ci' // 'npm ci' is preferred for CI for faster, reliable builds from package-lock.json
-                sh 'echo "Building Next.js app with npm run build..."'
+                sh 'npm ci'
                 sh 'npm run build'
             }
         }
 
-        stage('Build Docker Image') {
+        stage('Build Docker Image for Production') {
             steps {
                 script {
                     def imageTag = env.BUILD_NUMBER ?: sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
-                    env.FULL_IMAGE_NAME = "${env.DOCKER_IMAGE_NAME}:${imageTag}"
-                    env.LATEST_IMAGE_NAME = "${env.DOCKER_IMAGE_NAME}:latest"
-
-                    sh "docker build -t ${env.FULL_IMAGE_NAME} -t ${env.LATEST_IMAGE_NAME} ."
-                    echo "Built Docker image: ${env.FULL_IMAGE_NAME} and ${env.LATEST_IMAGE_NAME}"
+                    env.FULL_IMAGE_NAME_PROD = "${env.DOCKER_IMAGE_NAME}:${imageTag}"
+                    env.LATEST_IMAGE_NAME_PROD = "${env.DOCKER_IMAGE_NAME}:latest"
+                    sh "docker build -t ${env.FULL_IMAGE_NAME_PROD} -t ${env.LATEST_IMAGE_NAME_PROD} ."
+                    echo "Built Production Docker image: ${env.FULL_IMAGE_NAME_PROD} and ${env.LATEST_IMAGE_NAME_PROD}"
                 }
             }
         }
 
-        stage('Push Docker Image to Staging Repo') {
+        stage('Push Docker Image to Production Repo') {
             steps {
                 script {
                     withDockerRegistry(credentialsId: env.DOCKERHUB_CREDENTIALS_ID) {
-                        sh "docker push ${env.FULL_IMAGE_NAME}"
-                        sh "docker push ${env.LATEST_IMAGE_NAME}"
+                        sh "docker push ${env.FULL_IMAGE_NAME_PROD}"
+                        sh "docker push ${env.LATEST_IMAGE_NAME_PROD}"
                     }
-                    echo "Pushed ${env.FULL_IMAGE_NAME} and ${env.LATEST_IMAGE_NAME} to Docker Hub"
+                    echo "Pushed ${env.FULL_IMAGE_NAME_PROD} and ${env.LATEST_IMAGE_NAME_PROD} to Docker Hub production repo"
                 }
             }
         }
 
-        // --- Placeholder for Future K8s Deployment Stage (Part of Req 6 later) ---
-        // stage('Deploy to Staging K8s') {
-        //    steps {
-        //        script { echo "Skipping K8s deployment for now" }
-        //    }
-        // }
-        // --- End Placeholder K8s ---
+        stage('Deploy to Production K8s (Kubeadm Cluster)') {
+            steps {
+                withKubeConfig([credentialsId: env.KUBECONFIG_CREDENTIALS_ID]) {
+                    script {
+                        sh "kubectl create namespace ${env.K8S_NAMESPACE} || true"
+                        sh "echo 'Applying Production Deployment...'"
+                        sh "cat k8s/chatbot-deployment-prod.yaml > k8s/chatbot-deployment-prod-apply.yaml"
+                        sh "sed -i 's|image: .*|image: ${env.FULL_IMAGE_NAME_PROD}|g' k8s/chatbot-deployment-prod-apply.yaml"
+                        sh "kubectl apply -f k8s/chatbot-deployment-prod-apply.yaml -n ${env.K8S_NAMESPACE}"
+                        sh "kubectl apply -f k8s/chatbot-service-prod.yaml -n ${env.K8S_NAMESPACE}"
+                        sh "echo 'Waiting for rollout to complete...'"
+                        sh "kubectl rollout status deployment/${env.APP_DEPLOYMENT_NAME} -n ${env.K8S_NAMESPACE} --timeout=5m"
+                        echo "Deployed to Production K8s: ${env.FULL_IMAGE_NAME_PROD}"
+                    }
+                }
+            }
+        }
     }
-
     post {
         always {
-            echo 'Staging pipeline finished.'
+            echo 'Production pipeline finished.'
+            script {
+                sh "rm -f k8s/chatbot-deployment-prod-apply.yaml"
+            }
         }
         success {
-            echo "Staging pipeline successful for image: ${env.FULL_IMAGE_NAME}"
+            echo "Production pipeline successful for image: ${env.FULL_IMAGE_NAME_PROD}"
         }
         failure {
-            echo 'Staging pipeline failed.'
+            echo 'Production pipeline failed.'
         }
     }
 }

@@ -1,0 +1,35 @@
+# k8s/chatbot-deployment-prod.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chatbot-app-prod
+  namespace: production
+  labels:
+    app: chatbot-app-prod
+    environment: production
+spec:
+  replicas: 3 # Example: 3 replicas for production
+  selector:
+    matchLabels:
+      app: chatbot-app-prod
+  template:
+    metadata:
+      labels:
+        app: chatbot-app-prod
+        environment: production
+    spec:
+      containers:
+      - name: chatbot-app
+        image: aayush786/chatbot-prod:latest # <<< PRODUCTION IMAGE
+        ports:
+        - containerPort: 3000
+        env:
+        - name: NODE_ENV
+          value: "production"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"

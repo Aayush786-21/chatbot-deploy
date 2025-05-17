@@ -1,0 +1,17 @@
+# k8s/chatbot-service-prod.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: chatbot-app-prod-svc
+  namespace: production
+  labels:
+    app: chatbot-app-prod
+    environment: production
+spec:
+  selector:
+    app: chatbot-app-prod
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 3000
+  type: NodePort
